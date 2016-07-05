@@ -8,7 +8,7 @@ import json
 #################################################################################################
 
 
-class Credentials():
+class Credentials(object):
 
     credentials = None
     path = 'data.txt' # can be adjusted
@@ -52,9 +52,9 @@ class Credentials():
         # Remove credentials from file
         with open('data.txt', 'w'): pass
 
-    def credentials(self, data):
+    def credentials(self, data=None):
 
-        if data:
+        if data is not None:
             self.set(data)
 
         return get()
@@ -69,10 +69,9 @@ class Credentials():
             if existing['Id'] == server['Id']:
                 
                 # Merge the data
-                if server.get('DateLastAccessed'):
+                if server.get('DateLastAccessed'): # To review if item needs to be converted or not
                     existingDate = self.convertDate(
                         existing.get('DateLastAccessed', "2001-01-01T00:00:00Z"))
-                    serverDate = self.convertDate(server['DateLastAccessed'])
                     if serverDate > existingDate:
                         existing['DateLastAccessed'] = server['DateLastAccessed']
 
