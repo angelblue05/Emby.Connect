@@ -205,7 +205,8 @@ class ConnectionManager(object)
         if not credentials.get('ConnectAccessToken') or not credentials.get('ConnectUserId'):
             return servers
 
-        url = self.getConnectUrl("servers?userId=%s" % credentials['ConnectUserId'])
+        # Dummy up - don't involve connect
+        '''url = self.getConnectUrl("servers?userId=%s" % credentials['ConnectUserId'])
         request = {
             'type': "GET",
             'url': url,
@@ -215,24 +216,25 @@ class ConnectionManager(object)
             }
         }
         response = requestUrl(request)
-        for server in response:
+        if response:
+            for server in response:
 
-            if server['UserType'].lower() == "guest":
-                userType = "Guest"
-            else:
-                userType = "LinkedUser"
+                if server['UserType'].lower() == "guest":
+                    userType = "Guest"
+                else:
+                    userType = "LinkedUser"
 
-            servers.append({
-                'ExchangeToken': server['AccessKey'],
-                'ConnectServerId': server['Id'],
-                'Id': server['SystemId'],
-                'Name': server['Name'],
-                'RemoteAddress': server['Url'],
-                'LocalAddress': server['LocalAddress'],
-                'UserLinkType': userType
-            })
-        else:
-            return servers
+                servers.append({
+                    'ExchangeToken': server['AccessKey'],
+                    'ConnectServerId': server['Id'],
+                    'Id': server['SystemId'],
+                    'Name': server['Name'],
+                    'RemoteAddress': server['Url'],
+                    'LocalAddress': server['LocalAddress'],
+                    'UserLinkType': userType
+                })'''
+
+        return servers
 
     def getAvailableServers(self):
         
