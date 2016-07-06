@@ -32,7 +32,7 @@ class Credentials(object):
     def get(self):
 
         self.ensure()
-        return credentials
+        return self.credentials
 
     def set(self, data):
 
@@ -57,7 +57,7 @@ class Credentials(object):
         if data is not None:
             self.set(data)
 
-        return get()
+        return self.get()
 
     def addOrUpdateServer(self, array, server):
 

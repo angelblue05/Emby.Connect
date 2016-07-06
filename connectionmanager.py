@@ -24,7 +24,7 @@ class ConnectionManager(object):
 
 
     def __init__(self, appName, appVersion, deviceName, deviceId,
-            capabilities, devicePixelRatio):
+            capabilities=None, devicePixelRatio=None):
         
         self.credentialProvider = cred.Credentials()
         self.appName = appName
@@ -49,7 +49,7 @@ class ConnectionManager(object):
         if request['dataType'] == "json":
             headers['Accept'] = "application/json"
 
-        headers['X-Application'] = addAppInfoToConnectRequest()
+        headers['X-Application'] = self.addAppInfoToConnectRequest()
         headers['Content-type'] = request.get('contentType',
             'application/x-www-form-urlencoded; charset=UTF-8')
 
@@ -61,16 +61,18 @@ class ConnectionManager(object):
             print "Request cannot be null"
             return False
 
-        print "ConnectionManager requesting url: %s" % request['url']
-
         headers = self.getHeaders(request)
+        url = request['url']
+        timeout = request.get('timeout', self.defaultTimeout)
+        verify = False
+        print "ConnectionManager requesting url: %s" % url
 
         if request['type'] == "GET":
             response = requests.get(url, json=request.get('data'), params=request.get('params'),
-                headers=headers, timeout=request['timeout'])
+                headers=headers, timeout=timeout, verify=verify)
         elif request['type'] == "POST":
-            response = requests.post(url,
-                data=request.get('data'), headers=headers, timeout=request['timeout'])
+            response = requests.post(url, data=request.get('data'),
+                headers=headers, timeout=timeout, verify=verify)
             
         print "ConnectionManager response status: %s" % response.status_code
 
@@ -187,7 +189,7 @@ class ConnectionManager(object):
         if timeout is None:
             timeout = defaultTimeout
 
-        return requestUrl({
+        return self.requestUrl({
             'type': "GET",
             'url': url,
             'dataType': "json",
@@ -308,12 +310,13 @@ class ConnectionManager(object):
             },
             'dataType': "json"
         }
-        result = requestUrl(request)
+        result = self.requestUrl(request)
+        print result
         if result:
-            credentials = self.credentialProvider.credentials()
+            credentials = {}#self.credentialProvider.credentials()
             credentials['ConnectAccessToken'] = result['AccessToken']
             credentials['ConnectUserId'] = result['User']['Id']
-            self.credentialProvider.getCredentials(credentials)
+            self.credentialProvider.credentials(credentials)
             return result
             #self.onConnectUserSignIn(result['User'])
         else:
