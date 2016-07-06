@@ -4,6 +4,7 @@
 
 from datetime import datetime
 import json
+import os
 
 #################################################################################################
 
@@ -11,7 +12,7 @@ import json
 class Credentials(object):
 
     credentials = None
-    path = 'data.txt' # can be adjusted
+    path = "" # can be adjusted
     
 
     def __init__(self):
@@ -21,9 +22,12 @@ class Credentials(object):
     def ensure(self):
         
         if self.credentials is None:
-
-            with open(self.path) as infile:
-                jsonData = json.loads(infile)
+            try:
+                with open(os.path.join(self.path, 'data.txt')) as infile:
+                    jsonData = json.load(infile)
+            except: # File is either empty or missing
+                self.credentials = {}
+                return
 
             print "credentials initialized with: %s" % jsonData
             self.credentials = jsonData
@@ -39,7 +43,7 @@ class Credentials(object):
         if data:
             self.credentials = data
             # Set credentials to file
-            with open(self.path, 'w') as outfile:
+            with open(os.path.join(self.path, 'data.txt'), 'w') as outfile:
                 json.dump(data, outfile, indent=4, ensure_ascii=False)
         else:
             self.clear()
@@ -50,9 +54,9 @@ class Credentials(object):
 
         self.credentials = None
         # Remove credentials from file
-        with open('data.txt', 'w'): pass
+        with open(os.path.join(self.path, 'data.txt'), 'w'): pass
 
-    def credentials(self, data=None):
+    def getCredentials(self, data=None):
 
         if data is not None:
             self.set(data)

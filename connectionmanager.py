@@ -10,6 +10,8 @@ import socket
 import credentials as cred
 import connectservice
 
+requests.packages.urllib3.disable_warnings()
+
 #################################################################################################
 
 ConnectionMode = {
@@ -34,6 +36,9 @@ class ConnectionManager(object):
         self.capabilities = capabilities
         self.devicePixelRatio = devicePixelRatio
 
+    def setFilePath(self, path):
+        # Set where to save persistant data
+        self.credentialProvider.path = path
 
     def mergeServers(self, list1, list2):
 
@@ -102,7 +107,7 @@ class ConnectionManager(object):
 
         for foundServer in foundServers:
 
-            server = convertEndpointAddressToManualAddress(foundServer)
+            server = self.convertEndpointAddressToManualAddress(foundServer)
             if server is None:
                 server = foundServer['Address']
 
@@ -243,7 +248,7 @@ class ConnectionManager(object):
         print "Begin getAvailableServers"
 
         # Clone the array
-        credentials = self.credentialProvider.credentials()
+        credentials = self.credentialProvider.getCredentials()
 
         connectServers = self.getConnectServers(credentials)
         foundServers = self.findServers()
@@ -255,7 +260,7 @@ class ConnectionManager(object):
         servers = self.filterServers(servers, connectServers)
 
         credentials['Servers'] = servers
-        self.credentialProvider.credentials(credentials)
+        self.credentialProvider.getCredentials(credentials)
 
         return servers
 
@@ -311,13 +316,11 @@ class ConnectionManager(object):
             'dataType': "json"
         }
         result = self.requestUrl(request)
-        print result
         if result:
-            credentials = {}#self.credentialProvider.credentials()
+            credentials = self.credentialProvider.getCredentials()
             credentials['ConnectAccessToken'] = result['AccessToken']
             credentials['ConnectUserId'] = result['User']['Id']
-            self.credentialProvider.credentials(credentials)
+            self.credentialProvider.getCredentials(credentials)
             return result
-            #self.onConnectUserSignIn(result['User'])
         else:
             return False
