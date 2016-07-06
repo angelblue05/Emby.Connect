@@ -18,7 +18,7 @@ ConnectionMode = {
     'Manual': 2
 }
 
-class ConnectionManager(object)
+class ConnectionManager(object):
 
     defaultTimeout = 20000
 
