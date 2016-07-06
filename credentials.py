@@ -25,13 +25,14 @@ class Credentials(object):
             try:
                 with open(os.path.join(self.path, 'data.txt')) as infile:
                     jsonData = json.load(infile)
+            
             except: # File is either empty or missing
-                self.credentials = {}
-                return
-
-            print "credentials initialized with: %s" % jsonData
-            self.credentials = jsonData
-            self.credentials['Servers'] = self.credentials.setdefault('Servers', [])
+                self.credentials = {'Servers': []}
+            
+            else:
+                print "credentials initialized with: %s" % jsonData
+                self.credentials = jsonData
+                self.credentials['Servers'] = self.credentials.setdefault('Servers', [])
 
     def get(self):
 
@@ -69,7 +70,7 @@ class Credentials(object):
             print "Server Id cannot be null or empty"
             return False
 
-        for existing in array['Server']:
+        for existing in array:
             if existing['Id'] == server['Id']:
                 
                 # Merge the data
@@ -79,7 +80,8 @@ class Credentials(object):
                     if serverDate > existingDate:
                         existing['DateLastAccessed'] = server['DateLastAccessed']
 
-                existing['UserLinkType'] = server['UserLinkType']
+                if server.get('UserLinkType'):
+                    existing['UserLinkType'] = server['UserLinkType']
 
                 if server.get('AccessToken'):
                     existing['AccessToken'] = server['AccessToken']

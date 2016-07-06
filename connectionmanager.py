@@ -170,11 +170,11 @@ class ConnectionManager(object):
             
             except socket.timeout:
                 print "Found Servers: %s" % servers
-                return server
+                return servers
             
             except Exception as e:
                 print "Error trying to find servers: %s" % e
-                return server
+                return servers
 
     def normalizeAddress(self, address):
         # Attempt to correct bad input
@@ -213,7 +213,7 @@ class ConnectionManager(object):
             return servers
 
         # Dummy up - don't involve connect
-        '''url = self.getConnectUrl("servers?userId=%s" % credentials['ConnectUserId'])
+        url = self.getConnectUrl("servers?userId=%s" % credentials['ConnectUserId'])
         request = {
             'type': "GET",
             'url': url,
@@ -222,7 +222,7 @@ class ConnectionManager(object):
                 'X-Connect-UserToken': credentials['ConnectAccessToken']
             }
         }
-        response = requestUrl(request)
+        response = self.requestUrl(request)
         if response:
             for server in response:
 
@@ -239,7 +239,7 @@ class ConnectionManager(object):
                     'RemoteAddress': server['Url'],
                     'LocalAddress': server['LocalAddress'],
                     'UserLinkType': userType
-                })'''
+                })
 
         return servers
 
@@ -251,7 +251,7 @@ class ConnectionManager(object):
         credentials = self.credentialProvider.getCredentials()
 
         connectServers = self.getConnectServers(credentials)
-        foundServers = self.findServers()
+        foundServers = self.findServers(self.serverDiscovery())
 
         servers = list(credentials['Servers'])
         self.mergeServers(servers, foundServers)
