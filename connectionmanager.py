@@ -101,7 +101,7 @@ class ConnectionManager(object):
         for foundServer in foundServers:
 
             server = convertEndpointAddressToManualAddress(foundServer)
-            if server is None
+            if server is None:
                 server = foundServer['Address']
 
             info = {
