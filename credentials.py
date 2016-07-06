@@ -65,7 +65,7 @@ class Credentials(object):
             print "Server Id cannot be null or empty"
             return False
 
-        for existing in array['Server']
+        for existing in array['Server']:
             if existing['Id'] == server['Id']:
                 
                 # Merge the data
