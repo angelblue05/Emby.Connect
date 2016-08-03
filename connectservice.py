@@ -2,7 +2,9 @@
 
 #################################################################################################
 
-def cleanPassword(password=""):
+def cleanPassword(password):
+
+    password = password or ""
 
     password = password.replace("&", '&amp;')
     password = password.replace("/", '&#092;')

@@ -2,9 +2,14 @@
 
 #################################################################################################
 
-from datetime import datetime
 import json
+import logging
 import os
+from datetime import datetime
+
+#################################################################################################
+
+log = logging.getLogger(__name__)
 
 #################################################################################################
 
@@ -12,34 +17,36 @@ import os
 class Credentials(object):
 
     credentials = None
-    path = "" # can be adjusted
+    path = ""
     
 
     def __init__(self):
         pass
 
+    def setPath(self, path):
+        # Path to save persistant data
+        self.path = path
 
-    def ensure(self):
+    def _ensure(self):
         
         if self.credentials is None:
             try:
                 with open(os.path.join(self.path, 'data.txt')) as infile:
-                    jsonData = json.load(infile)
+                    self.credentials = json.load(infile)
             
-            except: # File is either empty or missing
-                self.credentials = {'Servers': []}
+            except Exception as e: # File is either empty or missing
+                log.warn(e)
+                self.credentials = {}
             
-            else:
-                print "credentials initialized with: %s" % jsonData
-                self.credentials = jsonData
-                self.credentials['Servers'] = self.credentials.setdefault('Servers', [])
+            log.info("credentials initialized with: %s" % self.credentials)
+            self.credentials['Servers'] = self.credentials.setdefault('Servers', [])
 
-    def get(self):
+    def _get(self):
 
-        self.ensure()
+        self._ensure()
         return self.credentials
 
-    def set(self, data):
+    def _set(self, data):
 
         if data:
             self.credentials = data
@@ -47,11 +54,11 @@ class Credentials(object):
             with open(os.path.join(self.path, 'data.txt'), 'w') as outfile:
                 json.dump(data, outfile, indent=4, ensure_ascii=False)
         else:
-            self.clear()
+            self._clear()
 
-        print "credentialsupdated"
+        log.info("credentialsupdated")
 
-    def clear(self):
+    def _clear(self):
 
         self.credentials = None
         # Remove credentials from file
@@ -60,24 +67,22 @@ class Credentials(object):
     def getCredentials(self, data=None):
 
         if data is not None:
-            self.set(data)
+            self._set(data)
 
-        return self.get()
+        return self._get()
 
-    def addOrUpdateServer(self, array, server):
+    def addOrUpdateServer(self, list_, server):
 
         if not server.get('Id'):
-            print "Server Id cannot be null or empty"
-            return False
+            raise KeyError("Server['Id'] cannot be null or empty")
 
-        for existing in array:
+        for existing in list_:
             if existing['Id'] == server['Id']:
                 
                 # Merge the data
-                if server.get('DateLastAccessed'): # To review if item needs to be converted or not
-                    existingDate = self.convertDate(
-                        existing.get('DateLastAccessed', "2001-01-01T00:00:00Z"))
-                    if serverDate > existingDate:
+                existing['DateLastAccessed'] = existing.get('DateLastAccessed', "2001-01-01T00:00:00Z")
+                if server.get('DateLastAccessed'):
+                    if self.dateObject(server['DateLastAccessed']) > self.dateObject(existing['DateLastAccessed']):
                         existing['DateLastAccessed'] = server['DateLastAccessed']
 
                 if server.get('UserLinkType'):
@@ -113,14 +118,12 @@ class Credentials(object):
 
                 return existing
         else:
-            array.append(server)
+            list_.append(server)
             return server
 
     def addOrUpdateUser(self, server, user):
 
-        server['Users'] = server.setdefault('Users', [])
-
-        for existing in server['Users']:
+        for existing in server.setdefault('Users', []):
             if existing['Id'] == user['Id']:
                 # Merge the data
                 existing['IsSignedInOffline'] = True
@@ -128,13 +131,7 @@ class Credentials(object):
         else:
             server['Users'].append(user)
 
-    def convertDate(self, date):
-
-        try:
-            date = datetime.strptime(date, "%Y-%m-%dT%H:%M:%SZ")
-        except TypeError:
-            # TypeError: attribute of type 'NoneType' is not callable
-            # Known Kodi/python error
-            date = datetime(*(time.strptime(date, "%Y-%m-%dT%H:%M:%SZ")[0:6]))
-
-        return date
+    def dateObject(self, date):
+        # Convert string to date
+        date_obj = datetime.strptime(date, "%Y-%m-%dT%H:%M:%SZ")
+        return date_obj
