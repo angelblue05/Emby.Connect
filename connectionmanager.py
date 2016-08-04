@@ -19,6 +19,15 @@ log = logging.getLogger(__name__)
 
 #################################################################################################
 
+ConnectionState = {
+    'Unavailable': 0,
+    'ServerSelection': 1,
+    'ServerSignIn': 2,
+    'SignedIn': 3,
+    'ConnectSignIn': 4,
+    'ServerUpdateNeeded': 5
+}
+
 ConnectionMode = {
     'Local': 0,
     'Remote': 1,
@@ -58,7 +67,7 @@ class ConnectionManager(object):
         # Set where to save persistant data
         self.credentialProvider.setPath(path)
 
-    def mergeServers(self, list1, list2):
+    def _mergeServers(self, list1, list2):
 
         for i in range(0, len(list2), 1):
             try:
@@ -67,6 +76,16 @@ class ConnectionManager(object):
                 continue
 
         return list1
+
+    def _getConnectUser(self):
+        return self.connectUser
+
+    def _resolveFailure(self):
+
+        return ({
+            'State': ConnectionState['Unavailable'],
+            'ConnectUser': self._getConnectUser()
+        })
 
     def _updateServerInfo(self, server, systemInfo):
 
@@ -215,6 +234,31 @@ class ConnectionManager(object):
 
         return address
 
+    def connectToAddress(self, address, options):
+
+        if not address:
+            return False
+
+        address = self._normalizeAddress(address)
+
+        def _onFail():
+            log.error("connectToAddress %s failed" % address)
+            self._resolveFailure()
+            
+        try:
+            publicInfo = self._tryConnect(address)
+        except Exception:
+            _onFail()
+        else:
+            log.info("connectToAddress %s succeeded" % address)
+            server = {
+                'ManualAddress': address,
+                'LastConnectionMode': ConnectionMode['Manual']
+            }
+            self._updateServerInfo(server, publicInfo)
+            if self._connectToServer(server, options) is False:
+                _onFail()
+
     def _tryConnect(self, url, timeout=None):
 
         url = self.getEmbyServerUrl(url, "system/info/public")
@@ -277,8 +321,8 @@ class ConnectionManager(object):
         foundServers = self._findServers(self.serverDiscovery())
 
         servers = list(credentials['Servers'])
-        self.mergeServers(servers, foundServers)
-        self.mergeServers(servers, connectServers)
+        self._mergeServers(servers, foundServers)
+        self._mergeServers(servers, connectServers)
 
         servers = self._filterServers(servers, connectServers)
 
@@ -327,7 +371,7 @@ class ConnectionManager(object):
         # Ensure this is created so that listeners of the event can get the apiClient instance
         pass
 
-    def connectToServer(self, server, options):
+    def _connectToServer(self, server, options):
 
         log.info("being connectToServer")
 
@@ -348,7 +392,7 @@ class ConnectionManager(object):
         options = options or {}
 
         log.info("beginning connection tests")
-        self._testNextConnectionMode(tests, 0, server, options)
+        return self._testNextConnectionMode(tests, 0, server, options)
 
     def _stringEqualsIgnoreCase(self, str1, str2):
 
@@ -426,7 +470,7 @@ class ConnectionManager(object):
 
         options = options or {}
 
-        if not options.get('enableAutoLogin'):
+        if options.get('enableAutoLogin') is False:
             server['UserId'] = None
             server['AccessToken'] = None
         
