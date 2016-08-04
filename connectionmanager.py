@@ -92,7 +92,7 @@ class ConnectionManager(object):
         if val is not None:
             self.minServerVersion = val
 
-        return val
+        return self.minServerVersion
 
     def _updateServerInfo(self, server, systemInfo):
 
@@ -255,7 +255,7 @@ class ConnectionManager(object):
         try:
             publicInfo = self._tryConnect(address)
         except Exception:
-            _onFail()
+            return _onFail()
         else:
             log.info("connectToAddress %s succeeded" % address)
             server = {
@@ -264,7 +264,7 @@ class ConnectionManager(object):
             }
             self._updateServerInfo(server, publicInfo)
             if self._connectToServer(server, options) is False:
-                _onFail()
+                return _onFail()
 
     def _tryConnect(self, url, timeout=None):
 
@@ -387,7 +387,7 @@ class ConnectionManager(object):
         a = a.split('.')
         b = b.split('.')
 
-        for i in range(0, max(len(a), len(b)) 1):
+        for i in range(0, max(len(a), len(b)), 1):
             try:
                 aVal = a[i]
             except IndexError:
@@ -408,7 +408,7 @@ class ConnectionManager(object):
 
     def _connectToServer(self, server, options):
 
-        log.info("being connectToServer")
+        log.info("begin connectToServer")
 
         tests = []
 
@@ -427,7 +427,7 @@ class ConnectionManager(object):
         options = options or {}
 
         log.info("beginning connection tests")
-        self._testNextConnectionMode(tests, 0, server, options)
+        return self._testNextConnectionMode(tests, 0, server, options)
 
     def _stringEqualsIgnoreCase(self, str1, str2):
 
@@ -449,13 +449,13 @@ class ConnectionManager(object):
             enableRetry = True
             timeout = 8000
 
-            if self._stringEqualsIgnoreCase(address, server['ManualAddress']):
+            if self._stringEqualsIgnoreCase(address, server.get('ManualAddress')):
                 log.info("skipping LocalAddress test because it is the same as ManualAddress")
                 skipTest = True
 
         elif mode == ConnectionMode['Manual']:
 
-            if self._stringEqualsIgnoreCase(address, server['LocalAddress']):
+            if self._stringEqualsIgnoreCase(address, server.get('LocalAddress')):
                 enableRetry = True
                 timeout = 8000
 
@@ -467,7 +467,17 @@ class ConnectionManager(object):
         log.info("testing connection mode %s with server %s" % (mode, server['Name']))
         try:
             result = self._tryConnect(address, timeout)
-            
+        
+        except Exception:
+            log.error("test failed for connection mode %s with server %s" % (mode, server['Name']))
+
+            if enableRetry:
+                # TODO: wake on lan and retry
+                self._testNextConnectionMode(tests, index+1, server, options)
+            else:
+                self._testNextConnectionMode(tests, index+1, server, options)
+        else:
+
             if self._compareVersions(self._getMinServerVersion(), result['Version']) == 1:
                 log.warn("minServerVersion requirement not met. Server version: %s" % result['Version'])
                 return {
@@ -478,15 +488,6 @@ class ConnectionManager(object):
                 log.info("calling onSuccessfulConnection with connection mode %s with server %s"
                         % (mode, server['Name']))
                 self._onSuccessfulConnection(server, result, mode, options)
-        
-        except Exception:
-            log.error("test failed for connection mode %s with server %s" % (mode, server['Name']))
-
-            if enableRetry:
-                # TODO: wake on lan and retry
-                self._testNextConnectionMode(tests, index+1, server, options)
-            else:
-                self._testNextConnectionMode(tests, index+1, server, options)
 
     def _onSuccessfulConnection(self, server, systemInfo, connectionMode, options):
         # TODO: Review to maybe simplify the duplicated lines
@@ -525,7 +526,7 @@ class ConnectionManager(object):
 
             return
 
-        self.updateServerInfo(server, systemInfo)
+        self._updateServerInfo(server, systemInfo)
         server['LastConnectionMode'] = connectionMode
 
         if options.get('updateDateLastAccessed') is not False:
@@ -534,7 +535,15 @@ class ConnectionManager(object):
         self.credentialProvider.addOrUpdateServer(credentials['Servers'], server)
         self.credentialProvider.getCredentials(credentials)
 
+        result = {'Servers': []}
         # TODO: apiClient
+        result['State'] = ConnectionState['SignedIn'] if (server.get('AccessToken') and options.get('enableAutoLogin') is not False) else ConnectionState['ServerSignIn']
+        result['Servers'].append(server)
+
+        if result['State'] == ConnectionState['SignedIn']:
+            pass
+        # Connected
+        return result
 
     def _validateAuthentication(self, server, connectionMode):
 
@@ -687,7 +696,7 @@ class ConnectionManager(object):
             except Exception:
                 return False
 
-    def connect(self, options):
+    def connect(self, options={}):
 
         log.info("Begin connect")
 
@@ -695,13 +704,35 @@ class ConnectionManager(object):
         self.connectToServers(servers, options)
         return servers
 
-    def connectToServers(servers, options):
+    def connectToServers(self, servers, options):
 
         log.info("Begin connectToServers, with %s servers" % len(servers))
 
         if len(servers) == 1:
-            result = self.connectToServer(servers[0], options)
-            # TODO
+            result = self._connectToServer(servers[0], options)
+            if result.get('State') == ConnectionState['Unavailable']:
+                result['State'] = ConnectionState['ConnectSignIn'] if result['ConnectUser'] == None else ConnectionState['ServerSelection']
+
+            log.info("resolving connectToServers with result['State']: %s" % result)
+            return result
+        
+        try:
+            firstServer = servers[0]
+        except IndexError:
+            firstServer = None
+
+        # See if we have any saved credentials and can auto sign in
+        if firstServer:
+            
+            result = self._connectToServer(firstServer, options)
+            if result.get('State') == ConnectionState['SignedIn']:
+                return result
+
+        return {
+            'Servers': servers,
+            'State': ConnectionState['ConnectSignIn'] if (not len(servers) and not self._getConnectUser()) else ConnectionState['ServerSelection'],
+            'ConnectUser': self._getConnectUser()
+        }
 
     def _cleanConnectPassword(self, password):
 
