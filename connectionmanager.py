@@ -10,7 +10,6 @@ import socket
 from datetime import datetime
 
 import credentials as cred
-import connectservice
 
 #################################################################################################
 
@@ -49,6 +48,7 @@ class ConnectionManager(object):
 
     default_timeout = 20000
     apiClients = []
+    minServerVersion = "3.0.5930"
 
 
     def __init__(self, appName, appVersion, deviceName, deviceId, capabilities=None, devicePixelRatio=None):
@@ -82,10 +82,17 @@ class ConnectionManager(object):
 
     def _resolveFailure(self):
 
-        return ({
+        return {
             'State': ConnectionState['Unavailable'],
             'ConnectUser': self._getConnectUser()
-        })
+        }
+
+    def _getMinServerVersion(self, val=None):
+
+        if val is not None:
+            self.minServerVersion = val
+
+        return val
 
     def _updateServerInfo(self, server, systemInfo):
 
@@ -244,7 +251,7 @@ class ConnectionManager(object):
         def _onFail():
             log.error("connectToAddress %s failed" % address)
             self._resolveFailure()
-            
+
         try:
             publicInfo = self._tryConnect(address)
         except Exception:
@@ -353,7 +360,7 @@ class ConnectionManager(object):
 
     def _getConnectPasswordHash(self, password):
 
-        password = connectservice.cleanPassword(password)
+        password = self._cleanConnectPassword(password)
         
         return hashlib.md5(password).hexdigest()
 
@@ -370,6 +377,34 @@ class ConnectionManager(object):
 
         # Ensure this is created so that listeners of the event can get the apiClient instance
         pass
+
+    def _compareVersions(self, a, b):
+        """
+            -1 a is smaller
+            1 a is larger
+            0 equal
+        """
+        a = a.split('.')
+        b = b.split('.')
+
+        for i in range(0, max(len(a), len(b)) 1):
+            try:
+                aVal = a[i]
+            except IndexError:
+                aVal = 0
+
+            try:    
+                bVal = b[i]
+            except IndexError:
+                bVal = 0
+
+            if aVal < bVal:
+                return -1
+
+            if aVal > bVal:
+                return 1
+
+        return 0
 
     def _connectToServer(self, server, options):
 
@@ -392,7 +427,7 @@ class ConnectionManager(object):
         options = options or {}
 
         log.info("beginning connection tests")
-        return self._testNextConnectionMode(tests, 0, server, options)
+        self._testNextConnectionMode(tests, 0, server, options)
 
     def _stringEqualsIgnoreCase(self, str1, str2):
 
@@ -402,7 +437,7 @@ class ConnectionManager(object):
 
         if index >= len(tests):
             log.info("Tested all connection modes. Failing server connection.")
-            return False
+            return self._resolveFailure()
 
         mode = tests[index]
         address = getServerAddress(server, mode)
@@ -432,10 +467,18 @@ class ConnectionManager(object):
         log.info("testing connection mode %s with server %s" % (mode, server['Name']))
         try:
             result = self._tryConnect(address, timeout)
-            # TODO: compare server versions
-            log.info("calling onSuccessfulConnection with connection mode %s with server %s"
-                    % (mode, server['Name']))
-            self._onSuccessfulConnection(server, result, mode, options)
+            
+            if self._compareVersions(self._getMinServerVersion(), result['Version']) == 1:
+                log.warn("minServerVersion requirement not met. Server version: %s" % result['Version'])
+                return {
+                    'State': ConnectionState['ServerUpdateNeeded'],
+                    'Servers': [server]
+                }
+            else:
+                log.info("calling onSuccessfulConnection with connection mode %s with server %s"
+                        % (mode, server['Name']))
+                self._onSuccessfulConnection(server, result, mode, options)
+        
         except Exception:
             log.error("test failed for connection mode %s with server %s" % (mode, server['Name']))
 
@@ -643,3 +686,34 @@ class ConnectionManager(object):
                 self._onConnectUserSignIn(result)
             except Exception:
                 return False
+
+    def connect(self, options):
+
+        log.info("Begin connect")
+
+        servers = self.getAvailableServers()
+        self.connectToServers(servers, options)
+        return servers
+
+    def connectToServers(servers, options):
+
+        log.info("Begin connectToServers, with %s servers" % len(servers))
+
+        if len(servers) == 1:
+            result = self.connectToServer(servers[0], options)
+            # TODO
+
+    def _cleanConnectPassword(self, password):
+
+        password = password or ""
+
+        password = password.replace("&", '&amp;')
+        password = password.replace("/", '&#092;')
+        password = password.replace("!", '&#33;')
+        password = password.replace("$", '&#036;')
+        password = password.replace("\"", '&quot;')
+        password = password.replace("<", '&lt;')
+        password = password.replace(">", '&gt;')
+        password = password.replace("'", '&#39;')
+
+        return password
