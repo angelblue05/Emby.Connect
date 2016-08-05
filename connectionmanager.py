@@ -49,6 +49,7 @@ class ConnectionManager(object):
     default_timeout = 20000
     apiClients = []
     minServerVersion = "3.0.5930"
+    connectUser = None
 
 
     def __init__(self, appName, appVersion, deviceName, deviceId, capabilities=None, devicePixelRatio=None):
@@ -77,14 +78,14 @@ class ConnectionManager(object):
 
         return list1
 
-    def _getConnectUser(self):
+    def _connectUser(self):
         return self.connectUser
 
     def _resolveFailure(self):
 
         return {
             'State': ConnectionState['Unavailable'],
-            'ConnectUser': self._getConnectUser()
+            'ConnectUser': self._connectUser()
         }
 
     def _getMinServerVersion(self, val=None):
@@ -250,7 +251,7 @@ class ConnectionManager(object):
 
         def _onFail():
             log.error("connectToAddress %s failed" % address)
-            self._resolveFailure()
+            return self._resolveFailure()
 
         try:
             publicInfo = self._tryConnect(address)
@@ -701,10 +702,9 @@ class ConnectionManager(object):
         log.info("Begin connect")
 
         servers = self.getAvailableServers()
-        self.connectToServers(servers, options)
-        return servers
+        return self._connectToServers(servers, options)
 
-    def connectToServers(self, servers, options):
+    def _connectToServers(self, servers, options):
 
         log.info("Begin connectToServers, with %s servers" % len(servers))
 
@@ -717,21 +717,24 @@ class ConnectionManager(object):
             return result
         
         try:
+            # Order server list by last accessed, and use that server to log in
+            servers.sort(key=lambda x: datetime.strptime(x['DateLastAccessed'], "%Y-%m-%dT%H:%M:%SZ"), reverse=True)
             firstServer = servers[0]
-        except IndexError:
+        except (IndexError, TypeError):
             firstServer = None
 
         # See if we have any saved credentials and can auto sign in
         if firstServer:
             
             result = self._connectToServer(firstServer, options)
-            if result.get('State') == ConnectionState['SignedIn']:
-                return result
+            if result:
+                if result.get('State') == ConnectionState['SignedIn']:
+                    return result
 
         return {
             'Servers': servers,
-            'State': ConnectionState['ConnectSignIn'] if (not len(servers) and not self._getConnectUser()) else ConnectionState['ServerSelection'],
-            'ConnectUser': self._getConnectUser()
+            'State': ConnectionState['ConnectSignIn'] if (not len(servers) and not self._connectUser()) else ConnectionState['ServerSelection'],
+            'ConnectUser': self._connectUser()
         }
 
     def _cleanConnectPassword(self, password):
