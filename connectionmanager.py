@@ -33,6 +33,8 @@ ConnectionMode = {
     'Manual': 2
 }
 
+#################################################################################################
+
 def getServerAddress(server, mode):
 
     modes = {
@@ -41,12 +43,12 @@ def getServerAddress(server, mode):
         ConnectionMode['Manual']: server.get('ManualAddress')
     }
     return (modes.get(mode) or 
-            server.get('ManualAddress',server.get('LocalAddress',server.get('RemoteAddress'))))   
+            server.get('ManualAddress',server.get('LocalAddress',server.get('RemoteAddress'))))
 
 
 class ConnectionManager(object):
 
-    default_timeout = 20000
+    default_timeout = 20
     apiClients = []
     minServerVersion = "3.0.5930"
     connectUser = None
@@ -63,6 +65,7 @@ class ConnectionManager(object):
         self.deviceId = deviceId
         self.capabilities = capabilities
         self.devicePixelRatio = devicePixelRatio
+
 
     def setFilePath(self, path):
         # Set where to save persistant data
@@ -201,7 +204,7 @@ class ConnectionManager(object):
 
         return None
 
-    def serverDiscovery(self):
+    def _serverDiscovery(self):
         
         MULTI_GROUP = ("<broadcast>", 7359)
         MESSAGE = "who is EmbyServer?"
@@ -264,7 +267,7 @@ class ConnectionManager(object):
                 'LastConnectionMode': ConnectionMode['Manual']
             }
             self._updateServerInfo(server, publicInfo)
-            if self._connectToServer(server, options) is False:
+            if self.connectToServer(server, options) is False:
                 return _onFail()
 
     def _tryConnect(self, url, timeout=None):
@@ -313,12 +316,12 @@ class ConnectionManager(object):
                 'Name': server['Name'],
                 'RemoteAddress': server['Url'],
                 'LocalAddress': server['LocalAddress'],
-                'UserLinkType': "Guest" if server['UserType'].lower() == "guest" else "LinkedUser"
+                'UserLinkType': "Guest" if server['UserType'].lower() == "guest" else "LinkedUser",
             })
 
         return servers
 
-    def getAvailableServers(self):
+    def _getAvailableServers(self):
         
         log.info("Begin getAvailableServers")
 
@@ -326,7 +329,7 @@ class ConnectionManager(object):
         credentials = self.credentialProvider.getCredentials()
 
         connectServers = self._getConnectServers(credentials)
-        foundServers = self._findServers(self.serverDiscovery())
+        foundServers = self._findServers(self._serverDiscovery())
 
         servers = list(credentials['Servers'])
         self._mergeServers(servers, foundServers)
@@ -334,7 +337,10 @@ class ConnectionManager(object):
 
         servers = self._filterServers(servers, connectServers)
 
-        # TODO: Server sort by DateLastAccessed
+        try:
+            servers.sort(key=lambda x: datetime.strptime(x['DateLastAccessed'], "%Y-%m-%dT%H:%M:%SZ"), reverse=True)
+        except TypeError:
+            pass
 
         credentials['Servers'] = servers
         self.credentialProvider.getCredentials(credentials)
@@ -346,7 +352,6 @@ class ConnectionManager(object):
         filtered = []
 
         for server in servers:
-
             # It's not a connect server, so assume it's still valid
             if server.get('ExchangeToken') is None:
                 filtered.append(server)
@@ -407,7 +412,7 @@ class ConnectionManager(object):
 
         return 0
 
-    def _connectToServer(self, server, options):
+    def connectToServer(self, server, options):
 
         log.info("begin connectToServer")
 
@@ -448,7 +453,7 @@ class ConnectionManager(object):
 
         if mode == ConnectionMode['Local']:
             enableRetry = True
-            timeout = 8000
+            timeout = 8
 
             if self._stringEqualsIgnoreCase(address, server.get('ManualAddress')):
                 log.info("skipping LocalAddress test because it is the same as ManualAddress")
@@ -458,7 +463,7 @@ class ConnectionManager(object):
 
             if self._stringEqualsIgnoreCase(address, server.get('LocalAddress')):
                 enableRetry = True
-                timeout = 8000
+                timeout = 8
 
         if skipTest or not address:
             log.info("skipping test at index: %s" % index)
@@ -491,7 +496,7 @@ class ConnectionManager(object):
                 self._onSuccessfulConnection(server, result, mode, options)
 
     def _onSuccessfulConnection(self, server, systemInfo, connectionMode, options):
-        # TODO: Review to maybe simplify the duplicated lines
+
         credentials = self.credentialProvider.getCredentials()
         options = options or {}
 
@@ -537,12 +542,10 @@ class ConnectionManager(object):
         self.credentialProvider.getCredentials(credentials)
 
         result = {'Servers': []}
-        # TODO: apiClient
+
         result['State'] = ConnectionState['SignedIn'] if (server.get('AccessToken') and options.get('enableAutoLogin') is not False) else ConnectionState['ServerSignIn']
         result['Servers'].append(server)
 
-        if result['State'] == ConnectionState['SignedIn']:
-            pass
         # Connected
         return result
 
@@ -572,29 +575,11 @@ class ConnectionManager(object):
                         'X-MediaBrowser-Token': server['AccessToken']
                     }
                 })
-                # TODO: _onLocalUserSignIn
+
         except Exception:
             server['UserId'] = None
             server['AccessToken'] = None
             return False
-
-    def getImageUrl(self, localUser):
-
-        if self.connectUser.get('ImageUrl'):
-            return {
-                'url': self.connectUser['ImageUrl']
-            }
-        if localUser.get('PrimaryImageTag'):
-            # TODO: apiClient
-            return {
-                'url': url,
-                'supportsParams': True
-            }
-
-        return {
-            'url': None,
-            'supportsParams': False
-        }
 
     def loginToConnect(self, username, password):
 
@@ -616,7 +601,8 @@ class ConnectionManager(object):
         }
         try:
             result = self.requestUrl(request)
-        except Exception: # Failed to login
+        except Exception as e: # Failed to login
+            log.error(e)
             return False
         else:
             credentials = self.credentialProvider.getCredentials()
@@ -701,15 +687,15 @@ class ConnectionManager(object):
 
         log.info("Begin connect")
 
-        servers = self.getAvailableServers()
-        return self._connectToServers(servers, options)
+        servers = self._getAvailableServers()
+        return self.connectToServers(servers, options)
 
     def _connectToServers(self, servers, options):
 
         log.info("Begin connectToServers, with %s servers" % len(servers))
 
         if len(servers) == 1:
-            result = self._connectToServer(servers[0], options)
+            result = self.connectToServer(servers[0], options)
             if result.get('State') == ConnectionState['Unavailable']:
                 result['State'] = ConnectionState['ConnectSignIn'] if result['ConnectUser'] == None else ConnectionState['ServerSelection']
 
@@ -726,7 +712,7 @@ class ConnectionManager(object):
         # See if we have any saved credentials and can auto sign in
         if firstServer:
             
-            result = self._connectToServer(firstServer, options)
+            result = self.connectToServer(firstServer, options)
             if result:
                 if result.get('State') == ConnectionState['SignedIn']:
                     return result
