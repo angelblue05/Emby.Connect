@@ -71,6 +71,40 @@ class ConnectionManager(object):
         # Set where to save persistant data
         self.credentialProvider.setPath(path)
 
+    def _getAppVersion(self):
+        return self.appVersion
+
+    def _getCapabilities(self):
+        return self.capabilities
+
+    def _getDeviceId(self):
+        return self.deviceId
+
+    def _connectUserId(self):
+        return self.credentialProvider.getCredentials().get('ConnectUserId')
+
+    def _connectToken(self):
+        return self.credentialProvider.getCredentials().get('ConnectAccessToken')
+
+    def getServerInfo(self, id_):
+
+        servers = self.credentialProvider.getCredentials()['Servers']
+        
+        for s in servers:
+            if s['Id'] == id_:
+                return s
+
+    def _getLastUsedServer(self):
+
+        servers = self.credentialProvider.getCredentials()['Servers']
+
+        if not len(servers):
+            return
+
+        servers.sort(key=lambda x: datetime.strptime(x['DateLastAccessed'], "%Y-%m-%dT%H:%M:%SZ"), reverse=True)
+
+        return servers[0]
+
     def _mergeServers(self, list1, list2):
 
         for i in range(0, len(list2), 1):
@@ -82,6 +116,9 @@ class ConnectionManager(object):
         return list1
 
     def _connectUser(self):
+        
+        credentials = self.credentialProvider.getCredentials()
+        self._ensureConnectUser(credentials)
         return self.connectUser
 
     def _resolveFailure(self):
@@ -147,7 +184,7 @@ class ConnectionManager(object):
         else:
             try:
                 return r.json()
-            except requests.exceptions.ValueError:
+            except ValueError:
                 r.content # Read response to release connection
                 return
 
@@ -378,11 +415,6 @@ class ConnectionManager(object):
 
         self.credentialProvider.addOrUpdateUser(server, info)
 
-    def _onLocalUserSignIn(self, server, connectionMode, user):
-
-        # Ensure this is created so that listeners of the event can get the apiClient instance
-        pass
-
     def _compareVersions(self, a, b):
         """
             -1 a is smaller
@@ -502,8 +534,7 @@ class ConnectionManager(object):
 
                 if server.get('ExchangeToken'):
                     
-                    if self._addAuthenticationInfoFromConnect(server, connectionMode, credentials) is not False:
-                        pass
+                    self._addAuthenticationInfoFromConnect(server, connectionMode, credentials)
 
         return self._afterConnectValidated(server, credentials, systemInfo, connectionMode, True, options)
 
@@ -544,7 +575,7 @@ class ConnectionManager(object):
         request = {
 
             'type': "GET",
-            'url': url,
+            'url': self.getEmbyServerUrl(url, "System/Info"),
             'dataType': "json",
             'headers': {
                 'X-MediaBrowser-Token': server['AccessToken']
@@ -564,6 +595,7 @@ class ConnectionManager(object):
                         'X-MediaBrowser-Token': server['AccessToken']
                     }
                 })
+                # TODO: add apiclient
 
         except Exception:
             server['UserId'] = None
@@ -644,6 +676,9 @@ class ConnectionManager(object):
                 'url': url,
                 'type': "GET",
                 'dataType': "json",
+                'params': {
+                    'ConnectUserId': credentials['ConnectUserId']
+                },
                 'headers': {
                     'X-MediaBrowser-Token': server['ExchangeToken']
                 }
@@ -690,14 +725,8 @@ class ConnectionManager(object):
 
             log.info("resolving connectToServers with result['State']: %s" % result)
             return result
-        
-        try:
-            # Order server list by last accessed, and use that server to log in
-            servers.sort(key=lambda x: datetime.strptime(x['DateLastAccessed'], "%Y-%m-%dT%H:%M:%SZ"), reverse=True)
-            firstServer = servers[0]
-        except (IndexError, TypeError):
-            firstServer = None
 
+        firstServer = self._getLastUsedServer()
         # See if we have any saved credentials and can auto sign in
         if firstServer:
             
