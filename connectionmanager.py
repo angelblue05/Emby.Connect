@@ -114,10 +114,9 @@ class ConnectionManager(object):
         
         headers = request.setdefault('headers', {})
 
-        if request['dataType'] == "json":
+        if request.get('dataType') == "json":
             headers['Accept'] = "application/json"
-
-        request.pop('dataType')
+            request.pop('dataType')
 
         headers['X-Application'] = self._addAppInfoToConnectRequest()
         headers['Content-type'] = request.get('contentType',
@@ -412,7 +411,7 @@ class ConnectionManager(object):
 
         return 0
 
-    def connectToServer(self, server, options):
+    def connectToServer(self, server, options={}):
 
         log.info("begin connectToServer")
 
@@ -429,8 +428,6 @@ class ConnectionManager(object):
             tests.append(ConnectionMode['Remote'])
 
         # TODO: begin to wake server
-
-        options = options or {}
 
         log.info("beginning connection tests")
         return self._testNextConnectionMode(tests, 0, server, options)
@@ -493,12 +490,11 @@ class ConnectionManager(object):
             else:
                 log.info("calling onSuccessfulConnection with connection mode %s with server %s"
                         % (mode, server['Name']))
-                self._onSuccessfulConnection(server, result, mode, options)
+                return self._onSuccessfulConnection(server, result, mode, options)
 
     def _onSuccessfulConnection(self, server, systemInfo, connectionMode, options):
 
         credentials = self.credentialProvider.getCredentials()
-        options = options or {}
 
         if credentials.get('ConnectAccessToken') and options.get('enableAutoLogin') is not False:
             
@@ -507,18 +503,11 @@ class ConnectionManager(object):
                 if server.get('ExchangeToken'):
                     
                     if self._addAuthenticationInfoFromConnect(server, connectionMode, credentials) is not False:
-                        
-                        self._afterConnectValidated(server, credentials, systemInfo, connectionMode, True, options)
-                    else:
-                        self._afterConnectValidated(server, credentials, systemInfo, connectionMode, True, options)
-                else:
-                    self._afterConnectValidated(server, credentials, systemInfo, connectionMode, True, options)
-        else:
-            self._afterConnectValidated(server, credentials, systemInfo, connectionMode, True, options)
+                        pass
+
+        return self._afterConnectValidated(server, credentials, systemInfo, connectionMode, True, options)
 
     def _afterConnectValidated(self, server, credentials, systemInfo, connectionMode, verifyLocalAuthentication, options):
-
-        options = options or {}
 
         if options.get('enableAutoLogin') is False:
             server['UserId'] = None
@@ -633,7 +622,7 @@ class ConnectionManager(object):
             
             'type': "GET",
             'url': url,
-            'dateType': "json",
+            'dataType': "json",
             'headers': {
                 'X-Connect-UserToken': accessToken
             }
@@ -688,7 +677,7 @@ class ConnectionManager(object):
         log.info("Begin connect")
 
         servers = self._getAvailableServers()
-        return self.connectToServers(servers, options)
+        return self._connectToServers(servers, options)
 
     def _connectToServers(self, servers, options):
 
