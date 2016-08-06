@@ -117,8 +117,6 @@ class ConnectionManager(object):
 
     def _connectUser(self):
         
-        credentials = self.credentialProvider.getCredentials()
-        self._ensureConnectUser(credentials)
         return self.connectUser
 
     def _resolveFailure(self):
@@ -168,9 +166,10 @@ class ConnectionManager(object):
         request['timeout'] = request.get('timeout') or self.default_timeout
         request['verify'] = False
 
-        log.info("ConnectionManager requesting %s" % request)
         action = request['type']
         request.pop('type')
+
+        log.debug("ConnectionManager requesting %s" % request)
 
         try:
             r = self._requests(action, **request)
@@ -253,8 +252,8 @@ class ConnectionManager(object):
         sock.setsockopt(socket.SOL_IP, socket.IP_MULTICAST_LOOP, 1)
         sock.setsockopt(socket.IPPROTO_IP, socket.SO_REUSEADDR, 1)
         
-        log.info("MultiGroup      : %s" % str(MULTI_GROUP))
-        log.info("Sending UDP Data: %s" % MESSAGE)
+        log.debug("MultiGroup      : %s" % str(MULTI_GROUP))
+        log.debug("Sending UDP Data: %s" % MESSAGE)
         sock.sendto(MESSAGE, MULTI_GROUP)
         
         servers = []
@@ -373,10 +372,7 @@ class ConnectionManager(object):
 
         servers = self._filterServers(servers, connectServers)
 
-        try:
-            servers.sort(key=lambda x: datetime.strptime(x['DateLastAccessed'], "%Y-%m-%dT%H:%M:%SZ"), reverse=True)
-        except TypeError:
-            pass
+        servers.sort(key=lambda x: datetime.strptime(x['DateLastAccessed'], "%Y-%m-%dT%H:%M:%SZ"), reverse=True)
 
         credentials['Servers'] = servers
         self.credentialProvider.getCredentials(credentials)
@@ -548,7 +544,7 @@ class ConnectionManager(object):
             options.get('enableAutoLogin') is not False):
 
             if self._validateAuthentication(server, connectionMode) is not False:
-                self._afterConnectValidated(server, credentials, systemInfo, connectionMode, False, options)
+                return self._afterConnectValidated(server, credentials, systemInfo, connectionMode, False, options)
 
             return
 
@@ -561,8 +557,10 @@ class ConnectionManager(object):
         self.credentialProvider.addOrUpdateServer(credentials['Servers'], server)
         self.credentialProvider.getCredentials(credentials)
 
-        result = {'Servers': []}
-
+        result = {
+            'Servers': [],
+            'ConnectUser': self._connectUser()
+        }
         result['State'] = ConnectionState['SignedIn'] if (server.get('AccessToken') and options.get('enableAutoLogin') is not False) else ConnectionState['ServerSignIn']
         result['Servers'].append(server)
 
@@ -731,9 +729,8 @@ class ConnectionManager(object):
         if firstServer:
             
             result = self.connectToServer(firstServer, options)
-            if result:
-                if result.get('State') == ConnectionState['SignedIn']:
-                    return result
+            if result and result.get('State') == ConnectionState['SignedIn']:
+                return result
 
         return {
             'Servers': servers,
