@@ -492,8 +492,7 @@ class ConnectionManager(object):
 
         if skipTest or not address:
             log.info("skipping test at index: %s" % index)
-            self._testNextConnectionMode(tests, index+1, server, options)
-            return
+            return self._testNextConnectionMode(tests, index+1, server, options)
 
         log.info("testing connection mode %s with server %s" % (mode, server['Name']))
         try:
@@ -504,9 +503,9 @@ class ConnectionManager(object):
 
             if enableRetry:
                 # TODO: wake on lan and retry
-                self._testNextConnectionMode(tests, index+1, server, options)
+                return self._testNextConnectionMode(tests, index+1, server, options)
             else:
-                self._testNextConnectionMode(tests, index+1, server, options)
+                return self._testNextConnectionMode(tests, index+1, server, options)
         else:
 
             if self._compareVersions(self._getMinServerVersion(), result['Version']) == 1:
@@ -752,3 +751,14 @@ class ConnectionManager(object):
         password = password.replace("'", '&#39;')
 
         return password
+
+    def clearData(self):
+
+        log.info("connection manager clearing data")
+
+        self.connectUser = None
+        credentials = self.credentialProvider.getCredentials()
+        credentials['ConnectAccessToken'] = None
+        credentials['ConnectUserId'] = None
+        credentials['Servers'] = []
+        self.credentialProvider.getCredentials(credentials)
