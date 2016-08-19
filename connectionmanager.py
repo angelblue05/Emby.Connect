@@ -280,7 +280,7 @@ class ConnectionManager(object):
 
         return address
 
-    def connectToAddress(self, address, options):
+    def connectToAddress(self, address, options={}):
 
         if not address:
             return False
