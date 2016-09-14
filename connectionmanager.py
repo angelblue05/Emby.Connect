@@ -690,6 +690,8 @@ class ConnectionManager(object):
 
         url = getServerAddress(server, connectionMode)
         url = self.getEmbyServerUrl(url, "Connect/Exchange?format=json")
+        auth = ('MediaBrowser Client="%s", Device="%s", DeviceId="%s", Version="%s"'
+                % (self.appName, self.deviceName, self.deviceId, self.appVersion))
         try:
             auth = self.requestUrl({
 
@@ -700,7 +702,8 @@ class ConnectionManager(object):
                     'ConnectUserId': credentials['ConnectUserId']
                 },
                 'headers': {
-                    'X-MediaBrowser-Token': server['ExchangeToken']
+                    'X-MediaBrowser-Token': server['ExchangeToken'],
+                    'X-Emby-Authorization': auth
                 }
             })
         except Exception:
